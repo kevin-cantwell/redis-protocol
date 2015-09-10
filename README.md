@@ -1,10 +1,10 @@
 ## About
 
-The `redis-protocol` tool takes a stream of redis commands and reformats them according to the [redis protocol specification](http://redis.io/topics/protocol)
+The `resp` tool takes a stream of redis commands and reformats them according to the [redis serialization protocol](http://redis.io/topics/protocol)
 
 ## Installation
 
-`go get -u github.com/kevin-cantwell/redis-protocol`
+`go get -u github.com/kevin-cantwell/resp/cmd/resp`
 
 ## Usage
 
