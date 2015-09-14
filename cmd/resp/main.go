@@ -61,22 +61,19 @@ func main() {
 			}
 		}
 
-		respReader := bufio.NewReader(reader)
+		scanner := bufio.NewScanner(reader)
 		respWriter := NewRESPWriter(os.Stdout)
 
-		for {
-			line, err := respReader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					return
-				}
-				exit(err.Error(), 1)
-			}
+		for scanner.Scan() {
+			line := scanner.Text()
 
 			args := strings.Split(line, " ")
 			if err := respWriter.WriteCommand(args...); err != nil {
 				exit(err.Error(), 1)
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			exit(err.Error(), 1)
 		}
 	}
 
