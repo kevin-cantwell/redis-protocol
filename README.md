@@ -8,7 +8,7 @@ The `resp` tool takes a stream of redis commands and reformats them according to
 
 ## Usage
 
-`$ echo "LPUSH mylist bar" | redis-protocol`
+`$ echo "LPUSH mylist bar" | resp`
 
 Output is encoded as:
 
@@ -20,4 +20,4 @@ Output is encoded as:
 
 You can pipe the output into the redis command-line tool to take advantage of [redis pipelining](http://redis.io/topics/pipelining), which is a very efficient way to import large amounts of data into redis:
 
-`$ echo "LPUSH mylist bar" | redis-protocol | redis-cli --pipe`
+`$ echo "LPUSH mylist bar" | resp | redis-cli --pipe`
