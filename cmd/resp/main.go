@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/codegangsta/cli"
 )
@@ -49,7 +48,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "redis-protocol"
 	app.Usage = "A parser that converts a file of redis commands to the redis protocol."
-	app.Action = func(c *cli.Context) {
+	app.Action = func(c *cli.Context) error {
 		var err error
 		var reader io.Reader = os.Stdin
 
@@ -57,7 +56,7 @@ func main() {
 		if len(c.Args()) > 0 {
 			reader, err = os.Open(c.Args()[0])
 			if err != nil {
-				exit(err.Error(), 1)
+				return err
 			}
 		}
 
@@ -65,19 +64,46 @@ func main() {
 		respWriter := NewRESPWriter(os.Stdout)
 
 		for scanner.Scan() {
-			line := scanner.Text()
+			var args []string
+			var arg []byte
+			scanned := scanner.Bytes()
+			for i := 0; i < len(scanned); i++ {
+				b := scanned[i]
+				switch b {
+				case '\'', '"':
+					// Loop through until we find a terminating quote
+					arg = append(arg, b)
+					for i++; i < len(scanned); i++ {
+						c := scanned[i]
+						if c == b {
+							arg = arg[1:] // If the quote is terminated, strip the leading quote char
+							break
+						}
+						arg = append(arg, c)
+					}
+					args = append(args, string(arg))
+					arg = nil
+				case ' ':
+					args = append(args, string(arg))
+					arg = nil
+				default:
+					arg = append(arg, b)
+				}
+			}
+			if arg != nil {
+				args = append(args, string(arg))
+			}
 
-			args := strings.Split(line, " ")
 			if err := respWriter.WriteCommand(args...); err != nil {
-				exit(err.Error(), 1)
+				return err
 			}
 		}
-		if err := scanner.Err(); err != nil {
-			exit(err.Error(), 1)
-		}
+		return scanner.Err()
 	}
 
-	app.Run(os.Args)
+	if err := app.Run(os.Args); err != nil {
+		exit(err.Error(), 1)
+	}
 }
 
 func exit(msg string, code int) {
