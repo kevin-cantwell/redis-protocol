@@ -42,17 +42,23 @@ func (w *Writer) WriteSimpleString(value string) error {
 	return nil
 }
 
-func (w *Writer) WriteBulkString(value string) error {
+func (w *Writer) WriteBulkString(value *string) error {
 	if err := w.out.WriteByte(bulkStringPrefix); err != nil {
 		return err
 	}
-	if _, err := w.out.WriteString(fmt.Sprint(len(value))); err != nil {
+	if value == nil {
+		if _, err := w.out.WriteString("-1\r\n"); err != nil {
+			return err
+		}
+		return nil
+	}
+	if _, err := w.out.WriteString(fmt.Sprint(len(*value))); err != nil {
 		return err
 	}
 	if _, err := w.out.WriteString("\r\n"); err != nil {
 		return err
 	}
-	if _, err := w.out.WriteString(value); err != nil {
+	if _, err := w.out.WriteString(*value); err != nil {
 		return err
 	}
 	if _, err := w.out.WriteString("\r\n"); err != nil {
@@ -84,23 +90,27 @@ func (w *Writer) WriteArray(array ...Data) error {
 	if _, err := w.out.WriteString("\r\n"); err != nil {
 		return err
 	}
-	for range array {
-		// switch v := data.(type) {
-		// case string, []byte:
-		// 	if err := w.WriteBulkString(string(v)); err != nil {
-		// 		return err
-		// 	}
-		// case int, uint, int8, uint8, int16, uint16, int32, uint32, int64, uint64:
-		// 	if err := w.WriteBulkString(string(v)); err != nil {
-		// 		return err
-		// 	}
-		// }
+	for _, data := range array {
+		if err := w.WriteData(data); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// func (w *Writer) WriteData(data Data) error {
-//   switch d := data.(type) {
-//   case *SimpleString:
-//   }
-// }
+func (w *Writer) WriteData(data Data) error {
+	switch d := data.(type) {
+	case SimpleString:
+		return w.WriteSimpleString(d.Val)
+	case BulkString:
+		return w.WriteBulkString(d.Val)
+	case Error:
+		return w.WriteError(d.Val)
+	case Integer:
+		return w.WriteInteger(d.Val)
+	case Array:
+		return w.WriteArray(d.Val...)
+	default:
+		return fmt.Errorf("resp: unknown data type %T", d)
+	}
+}
