@@ -92,17 +92,16 @@ func (r *Reader) ReadBulkString() (BulkString, error) {
 		return nil, nil
 	}
 	line2 := make([]byte, size)
-	for i := 0; i < size+2; i++ { // The extra 2 bytes is for the line terminator
+	for i := 0; i < size; i++ { // The extra 2 bytes is for the line terminator
 		b, err := r.src.ReadByte()
 		if err != nil {
 			return nil, err
 		}
-		if i < size {
-			line2[i] = b
-		}
-		if (i == size && b != '\r') || (i == size+1 && b != '\n') {
-			return nil, fmt.Errorf("resp: invalid bulk string terminator %q", b)
-		}
+		line2[i] = b
+	}
+	// Make sure to read the terminating CRLF
+	if _, _, err := r.src.ReadLine(); err != nil {
+		return nil, err
 	}
 	return BulkString(line2), nil
 }
