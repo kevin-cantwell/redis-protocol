@@ -5,44 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 
-	"github.com/codegangsta/cli"
+	"github.com/kevin-cantwell/resp"
+	"github.com/urfave/cli"
 )
-
-var (
-	arrayPrefixSlice      = []byte{'*'}
-	bulkStringPrefixSlice = []byte{'$'}
-	lineEndingSlice       = []byte{'\r', '\n'}
-)
-
-type RESPWriter struct {
-	*bufio.Writer
-}
-
-func NewRESPWriter(writer io.Writer) *RESPWriter {
-	return &RESPWriter{
-		Writer: bufio.NewWriter(writer),
-	}
-}
-
-func (w *RESPWriter) WriteCommand(args ...string) (err error) {
-	// Write the array prefix and the number of arguments in the array.
-	w.Write(arrayPrefixSlice)
-	w.WriteString(strconv.Itoa(len(args)))
-	w.Write(lineEndingSlice)
-
-	// Write a bulk string for each argument.
-	for _, arg := range args {
-		w.Write(bulkStringPrefixSlice)
-		w.WriteString(strconv.Itoa(len(arg)))
-		w.Write(lineEndingSlice)
-		w.WriteString(arg)
-		w.Write(lineEndingSlice)
-	}
-
-	return w.Flush()
-}
 
 func main() {
 	app := cli.NewApp()
@@ -61,10 +27,10 @@ func main() {
 		}
 
 		scanner := bufio.NewScanner(reader)
-		respWriter := NewRESPWriter(os.Stdout)
+		respWriter := resp.NewWriter(os.Stdout)
 
 		for scanner.Scan() {
-			var args []string
+			var array resp.Array
 			var arg []byte
 			scanned := scanner.Bytes()
 			for i := 0; i < len(scanned); i++ {
@@ -81,20 +47,20 @@ func main() {
 						}
 						arg = append(arg, c)
 					}
-					args = append(args, string(arg))
+					array = append(array, resp.BulkString(arg))
 					arg = nil
 				case ' ':
-					args = append(args, string(arg))
+					array = append(array, resp.BulkString(arg))
 					arg = nil
 				default:
 					arg = append(arg, b)
 				}
 			}
 			if arg != nil {
-				args = append(args, string(arg))
+				array = append(array, resp.BulkString(arg))
 			}
 
-			if err := respWriter.WriteCommand(args...); err != nil {
+			if err := respWriter.WriteData(array); err != nil {
 				return err
 			}
 		}
