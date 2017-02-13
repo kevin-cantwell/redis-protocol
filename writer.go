@@ -17,6 +17,8 @@ func NewWriter(w io.Writer) *Writer {
 }
 
 func (w *Writer) WriteError(value string) error {
+	defer w.out.Flush()
+
 	if err := w.out.WriteByte(errorPrefix); err != nil {
 		return err
 	}
@@ -30,6 +32,8 @@ func (w *Writer) WriteError(value string) error {
 }
 
 func (w *Writer) WriteSimpleString(value string) error {
+	defer w.out.Flush()
+
 	if err := w.out.WriteByte(simpleStringPrefix); err != nil {
 		return err
 	}
@@ -43,6 +47,8 @@ func (w *Writer) WriteSimpleString(value string) error {
 }
 
 func (w *Writer) WriteBulkString(value *string) error {
+	defer w.out.Flush()
+
 	if err := w.out.WriteByte(bulkStringPrefix); err != nil {
 		return err
 	}
@@ -68,6 +74,8 @@ func (w *Writer) WriteBulkString(value *string) error {
 }
 
 func (w *Writer) WriteInteger(value int64) error {
+	defer w.out.Flush()
+
 	if err := w.out.WriteByte(integerPrefix); err != nil {
 		return err
 	}
@@ -81,6 +89,8 @@ func (w *Writer) WriteInteger(value int64) error {
 }
 
 func (w *Writer) WriteArray(array ...Data) error {
+	defer w.out.Flush()
+
 	if err := w.out.WriteByte(arrayPrefix); err != nil {
 		return err
 	}
