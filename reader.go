@@ -19,59 +19,67 @@ func NewReader(r io.Reader) *Reader {
 
 func (r *Reader) ReadData() (Data, error) {
 	for {
-		b, err := r.src.ReadByte()
+		prefix, err := r.ReadPrefix()
 		if err != nil {
-			if err == io.EOF {
-				return nil, nil
-			}
 			return nil, err
 		}
-		switch b {
-		case simpleStringPrefix:
-			return r.readSimpleString()
-		case errorPrefix:
-			return r.readError()
-		case integerPrefix:
-			return r.readInteger()
-		case bulkStringPrefix:
-			return r.readBulkString()
-		case arrayPrefix:
-			return r.readArray()
-		default:
-			return nil, fmt.Errorf("resp: unknown data type %q", b)
+		switch prefix {
+		case '+':
+			return r.ReadSimpleString()
+		case '-':
+			return r.ReadError()
+		case ':':
+			return r.ReadInteger()
+		case '$':
+			return r.ReadBulkString()
+		case '*':
+			return r.ReadArray()
 		}
 	}
 }
 
-func (r *Reader) readSimpleString() (Data, error) {
-	line, _, err := r.src.ReadLine()
+func (r *Reader) ReadPrefix() (byte, error) {
+	prefix, err := r.src.ReadByte()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return SimpleString{Val: string(line)}, nil
+	switch prefix {
+	case '+', '-', ':', '$', '*':
+		return prefix, nil
+	default:
+		return 0, fmt.Errorf("resp: unknown prefix %q", prefix)
+	}
 }
 
-func (r *Reader) readError() (Data, error) {
+func (r *Reader) ReadSimpleString() (SimpleString, error) {
 	line, _, err := r.src.ReadLine()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return Error{Val: string(line)}, nil
+	return SimpleString(line), nil
 }
 
-func (r *Reader) readInteger() (Data, error) {
+func (r *Reader) ReadError() (Error, error) {
 	line, _, err := r.src.ReadLine()
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	return Error(line), nil
+}
+
+func (r *Reader) ReadInteger() (Integer, error) {
+	line, _, err := r.src.ReadLine()
+	if err != nil {
+		return 0, err
 	}
 	i, err := strconv.ParseInt(string(line), 10, 64)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return Integer{Val: i}, nil
+	return Integer(i), nil
 }
 
-func (r *Reader) readBulkString() (Data, error) {
+func (r *Reader) ReadBulkString() (BulkString, error) {
 	line1, _, err := r.src.ReadLine()
 	if err != nil {
 		return nil, err
@@ -81,7 +89,7 @@ func (r *Reader) readBulkString() (Data, error) {
 		return nil, err
 	}
 	if size == -1 {
-		return BulkString{Val: nil}, nil
+		return nil, nil
 	}
 	line2 := make([]byte, size)
 	for i := 0; i < size+2; i++ { // The extra 2 bytes is for the line terminator
@@ -96,11 +104,10 @@ func (r *Reader) readBulkString() (Data, error) {
 			return nil, fmt.Errorf("resp: invalid bulk string terminator %q", b)
 		}
 	}
-	value := string(line2)
-	return BulkString{Val: &value}, nil
+	return BulkString(line2), nil
 }
 
-func (r *Reader) readArray() (Data, error) {
+func (r *Reader) ReadArray() (Array, error) {
 	line, _, err := r.src.ReadLine()
 	if err != nil {
 		return nil, err
@@ -109,7 +116,7 @@ func (r *Reader) readArray() (Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	var value []Data
+	var value Array
 	for i := 0; i < size; i++ {
 		data, err := r.ReadData()
 		if err != nil {
@@ -117,5 +124,5 @@ func (r *Reader) readArray() (Data, error) {
 		}
 		value = append(value, data)
 	}
-	return Array{Val: value}, nil
+	return value, nil
 }

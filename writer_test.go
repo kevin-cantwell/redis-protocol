@@ -34,8 +34,7 @@ var _ = Describe("Writer", func() {
 		It("should write a bulk string", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			bs := "a bulk string 32 chars in length"
-			err := w.WriteBulkString(&bs)
+			err := w.WriteBulkString("a bulk string 32 chars in length")
 			Expect(err).To(BeNil())
 			p := make([]byte, 39)
 			b.Read(p)
@@ -44,7 +43,7 @@ var _ = Describe("Writer", func() {
 		It("should write a null bulk string", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			err := w.WriteBulkString(nil)
+			err := w.WriteNil()
 			Expect(err).To(BeNil())
 			p := make([]byte, 5)
 			b.Read(p)
@@ -75,8 +74,7 @@ var _ = Describe("Writer", func() {
 		It("should write an array", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			bs := "bulk string"
-			err := w.WriteArray(SimpleString{"OK"}, Error{"ERR invalid"}, BulkString{&bs}, BulkString{nil}, Integer{12345})
+			err := w.WriteArray(SimpleString("OK"), Error("ERR invalid"), BulkString("bulk string"), BulkString(nil), Integer(12345))
 			Expect(err).To(BeNil())
 			p := make([]byte, 54)
 			b.Read(p)
@@ -87,7 +85,7 @@ var _ = Describe("Writer", func() {
 		It("should write a simple string", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			err := w.WriteData(SimpleString{"a simple string"})
+			err := w.WriteData(SimpleString("a simple string"))
 			Expect(err).To(BeNil())
 			p := make([]byte, 18)
 			b.Read(p)
@@ -96,7 +94,7 @@ var _ = Describe("Writer", func() {
 		It("should write an error", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			err := w.WriteData(Error{"an error"})
+			err := w.WriteData(Error("an error"))
 			Expect(err).To(BeNil())
 			p := make([]byte, 11)
 			b.Read(p)
@@ -105,8 +103,7 @@ var _ = Describe("Writer", func() {
 		It("should write a bulk string", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			bs := "a bulk string 32 chars in length"
-			err := w.WriteData(BulkString{&bs})
+			err := w.WriteData(BulkString("a bulk string 32 chars in length"))
 			Expect(err).To(BeNil())
 			p := make([]byte, 39)
 			b.Read(p)
@@ -115,7 +112,7 @@ var _ = Describe("Writer", func() {
 		It("should write an integer", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			err := w.WriteData(Integer{12345})
+			err := w.WriteData(Integer(12345))
 			Expect(err).To(BeNil())
 			p := make([]byte, 8)
 			b.Read(p)
@@ -124,8 +121,7 @@ var _ = Describe("Writer", func() {
 		It("should write an array", func() {
 			b := bytes.Buffer{}
 			w := NewWriter(&b)
-			bs := "bulk string"
-			err := w.WriteData(Array{[]Data{SimpleString{"OK"}, Error{"ERR invalid"}, BulkString{&bs}, BulkString{nil}, Integer{12345}}})
+			err := w.WriteData(Array{SimpleString("OK"), Error("ERR invalid"), BulkString("bulk string"), BulkString(nil), Integer(12345)})
 			Expect(err).To(BeNil())
 			p := make([]byte, 54)
 			b.Read(p)

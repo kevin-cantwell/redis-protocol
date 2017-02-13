@@ -1,5 +1,7 @@
 package resp
 
+import "fmt"
+
 const (
 	simpleStringPrefix byte = '+'
 	errorPrefix             = '-'
@@ -9,35 +11,45 @@ const (
 )
 
 type Data interface {
-	protected() // Only this package may implement
+	Protocol() string // Only this package may implement
 }
 
-type Error struct {
-	Val string
+type Error string
+
+func (d Error) Protocol() string {
+	return fmt.Sprintf("-%s\r\n", d)
 }
 
-func (d Error) protected() {}
+type SimpleString string
 
-type SimpleString struct {
-	Val string
+// should we validate newline chars?
+func (d SimpleString) Protocol() string {
+	return fmt.Sprintf("+%s\r\n", d)
 }
 
-func (d SimpleString) protected() {}
+// BulkString supports null values so only the pointer type implements the Data interface
+type BulkString []byte
 
-type BulkString struct {
-	Val *string // Bulk strings support nil values
+func (d BulkString) Protocol() string {
+	if d == nil {
+		return "$-1\r\n"
+	}
+	s := string(d)
+	return fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)
 }
 
-func (d BulkString) protected() {}
+type Integer int64
 
-type Integer struct {
-	Val int64
+func (d Integer) Protocol() string {
+	return fmt.Sprintf(":%d\r\n", d)
 }
 
-func (d Integer) protected() {}
+type Array []Data
 
-type Array struct {
-	Val []Data
+func (d Array) Protocol() string {
+	s := fmt.Sprintf("*%d\r\n", len(d))
+	for _, data := range d {
+		s += data.Protocol()
+	}
+	return s
 }
-
-func (d Array) protected() {}
