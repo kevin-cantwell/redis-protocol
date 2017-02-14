@@ -2,108 +2,164 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 
-	"github.com/codegangsta/cli"
+	"github.com/kevin-cantwell/resp"
+	"github.com/urfave/cli"
 )
-
-var (
-	arrayPrefixSlice      = []byte{'*'}
-	bulkStringPrefixSlice = []byte{'$'}
-	lineEndingSlice       = []byte{'\r', '\n'}
-)
-
-type RESPWriter struct {
-	*bufio.Writer
-}
-
-func NewRESPWriter(writer io.Writer) *RESPWriter {
-	return &RESPWriter{
-		Writer: bufio.NewWriter(writer),
-	}
-}
-
-func (w *RESPWriter) WriteCommand(args ...string) (err error) {
-	// Write the array prefix and the number of arguments in the array.
-	w.Write(arrayPrefixSlice)
-	w.WriteString(strconv.Itoa(len(args)))
-	w.Write(lineEndingSlice)
-
-	// Write a bulk string for each argument.
-	for _, arg := range args {
-		w.Write(bulkStringPrefixSlice)
-		w.WriteString(strconv.Itoa(len(arg)))
-		w.Write(lineEndingSlice)
-		w.WriteString(arg)
-		w.Write(lineEndingSlice)
-	}
-
-	return w.Flush()
-}
 
 func main() {
 	app := cli.NewApp()
-	app.Name = "redis-protocol"
-	app.Usage = "A parser that converts a file of redis commands to the redis protocol."
-	app.Action = func(c *cli.Context) error {
+	app.Name = "resp"
+	app.Usage = "A redis protocol codex."
+	app.Flags = []cli.Flag{
+		cli.BoolFlag{
+			Name:  "decode, d",
+			Usage: "Decodes redis protocol. Default is to encode.",
+		},
+		cli.BoolFlag{
+			Name:  "raw, r",
+			Usage: "Decodes redis protocol into a raw format. Default is human-readable.",
+		},
+	}
+	app.Action = func(ctx *cli.Context) error {
 		var err error
 		var reader io.Reader = os.Stdin
 
 		// If a filename was passed in as an argument, read from the file instead of stdin
-		if len(c.Args()) > 0 {
-			reader, err = os.Open(c.Args()[0])
+		if len(ctx.Args()) > 0 {
+			reader, err = os.Open(ctx.Args()[0])
 			if err != nil {
 				return err
 			}
 		}
 
-		scanner := bufio.NewScanner(reader)
-		respWriter := NewRESPWriter(os.Stdout)
-
-		for scanner.Scan() {
-			var args []string
-			var arg []byte
-			scanned := scanner.Bytes()
-			for i := 0; i < len(scanned); i++ {
-				b := scanned[i]
-				switch b {
-				case '\'', '"':
-					// Loop through until we find a terminating quote
-					arg = append(arg, b)
-					for i++; i < len(scanned); i++ {
-						c := scanned[i]
-						if c == b {
-							arg = arg[1:] // If the quote is terminated, strip the leading quote char
-							break
-						}
-						arg = append(arg, c)
-					}
-					args = append(args, string(arg))
-					arg = nil
-				case ' ':
-					args = append(args, string(arg))
-					arg = nil
-				default:
-					arg = append(arg, b)
-				}
-			}
-			if arg != nil {
-				args = append(args, string(arg))
-			}
-
-			if err := respWriter.WriteCommand(args...); err != nil {
-				return err
-			}
+		if ctx.Bool("decode") {
+			return decodeRESP(ctx, reader)
+		} else {
+			return encodeRESP(ctx, reader)
 		}
-		return scanner.Err()
 	}
 
 	if err := app.Run(os.Args); err != nil {
 		exit(err.Error(), 1)
 	}
+}
+
+func skipEOF(err error) error {
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+func decodeRESP(ctx *cli.Context, r io.Reader) error {
+	reader := resp.NewReader(r)
+	for {
+		data, err := reader.ReadData()
+		if err != nil {
+			return skipEOF(err)
+		}
+		if err := writeData(ctx, data); err != nil {
+			return skipEOF(err)
+		}
+		// print a final newline
+		if _, err := os.Stdout.WriteString("\n"); err != nil {
+			return skipEOF(err)
+		}
+	}
+}
+
+func writeData(ctx *cli.Context, data resp.Data) error {
+	if ctx.Bool("raw") {
+		switch d := data.(type) {
+		case resp.BulkString:
+			_, err := os.Stdout.WriteString(fmt.Sprintf("%q", data.Raw()))
+			return err
+		case resp.Array:
+			for _, elem := range d {
+				if err := writeData(ctx, elem); err != nil {
+					return err
+				}
+			}
+			return nil
+		default:
+			_, err := os.Stdout.WriteString(data.Raw())
+			return err
+		}
+	} else {
+		// Print a human-readable output
+		_, err := os.Stdout.WriteString(data.Human())
+		return err
+	}
+
+}
+
+func encodeRESP(ctx *cli.Context, r io.Reader) error {
+	scanner := bufio.NewScanner(r)
+	respWriter := resp.NewWriter(os.Stdout)
+
+	for scanner.Scan() {
+		var array resp.Array
+		fields, err := parseFields(scanner.Bytes())
+		if err != nil {
+			return err
+		}
+		for _, field := range fields {
+			array = append(array, resp.BulkString(field))
+		}
+		if err := respWriter.WriteData(array); err != nil {
+			return err
+		}
+	}
+	return scanner.Err()
+}
+
+func parseFields(line []byte) ([][]byte, error) {
+	var field []byte
+	var fields [][]byte
+	for i := 0; i < len(line); i++ {
+		b := line[i]
+		switch b {
+		case ' ': // Treat 1 or more spaces as a delim
+			if len(field) > 0 {
+				fields = append(fields, field)
+				field = nil
+			}
+		case '"': // Treat double quoted strings as a single field and unescape chars like tabs or newlines
+			j := bytes.Index(line[i+1:], []byte{b})
+			if j < 0 {
+				field = append(field, b)
+				continue
+			}
+			// Append everything including the terminating quote
+			unquoted, err := strconv.Unquote(string(line[i : i+j+2]))
+			if err != nil {
+				return nil, err
+			}
+			field = append(field, []byte(unquoted)...)
+			i += j + 1
+		case '\'': // Treat single quotes as literal strings
+			j := bytes.Index(line[i+1:], []byte{b})
+			if j < 0 {
+				field = append(field, b)
+				continue
+			}
+			// Append everything including the terminating quote
+			field = append(field, line[i+1:i+j+1]...)
+			i += j + 1
+		default:
+			field = append(field, b)
+		}
+	}
+	if len(field) > 0 {
+		fields = append(fields, field)
+	}
+	return fields, nil
 }
 
 func exit(msg string, code int) {
