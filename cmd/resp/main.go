@@ -64,39 +64,16 @@ func decodeRESP(ctx *cli.Context, r io.Reader) error {
 		if err != nil {
 			return skipEOF(err)
 		}
-		if err := writeData(ctx, data); err != nil {
-			return skipEOF(err)
+		var output string
+		if ctx.Bool("raw") {
+			output = data.Raw()
+		} else {
+			output = data.Human()
 		}
-		// print a final newline
-		if _, err := os.Stdout.WriteString("\n"); err != nil {
-			return skipEOF(err)
-		}
-	}
-}
-
-func writeData(ctx *cli.Context, data resp.Data) error {
-	if ctx.Bool("raw") {
-		switch d := data.(type) {
-		case resp.BulkString:
-			_, err := os.Stdout.WriteString(fmt.Sprintf("%q", data.Raw()))
-			return err
-		case resp.Array:
-			for _, elem := range d {
-				if err := writeData(ctx, elem); err != nil {
-					return err
-				}
-			}
-			return nil
-		default:
-			_, err := os.Stdout.WriteString(data.Raw())
+		if _, err := os.Stdout.WriteString(output + "\n"); err != nil {
 			return err
 		}
-	} else {
-		// Print a human-readable output
-		_, err := os.Stdout.WriteString(data.Human())
-		return err
 	}
-
 }
 
 func encodeRESP(ctx *cli.Context, r io.Reader) error {
