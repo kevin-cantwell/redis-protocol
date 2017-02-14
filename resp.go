@@ -58,6 +58,9 @@ func (d BulkString) Raw() string {
 }
 
 func (d BulkString) Human() string {
+	if d == nil {
+		return "(nil)"
+	}
 	return fmt.Sprintf("%q", d)
 }
 
