@@ -2,6 +2,7 @@ package resp
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -12,6 +13,8 @@ type Data interface {
 	Raw() string
 	// Human is a human-readable representation.
 	Human() string
+	// Quote is a single-line, quoted representation. Array elements are quoted individually.
+	Quote() string
 }
 
 type Error string
@@ -28,6 +31,10 @@ func (d Error) Human() string {
 	return fmt.Sprintf("(error) %s", d)
 }
 
+func (d Error) Quote() string {
+	return strconv.Quote(d.Raw())
+}
+
 type SimpleString string
 
 // should we validate newline chars?
@@ -41,6 +48,10 @@ func (d SimpleString) Raw() string {
 
 func (d SimpleString) Human() string {
 	return string(d)
+}
+
+func (d SimpleString) Quote() string {
+	return strconv.Quote(d.Raw())
 }
 
 type BulkString []byte
@@ -64,6 +75,10 @@ func (d BulkString) Human() string {
 	return fmt.Sprintf("%q", d)
 }
 
+func (d BulkString) Quote() string {
+	return strconv.Quote(d.Raw())
+}
+
 type Integer int64
 
 func (d Integer) Protocol() string {
@@ -77,6 +92,10 @@ func (d Integer) Raw() string {
 func (d Integer) Human() string {
 	// quoted
 	return fmt.Sprintf("%d", d)
+}
+
+func (d Integer) Quote() string {
+	return strconv.Quote(d.Raw())
 }
 
 type Array []Data
@@ -104,4 +123,12 @@ func (d Array) Human() string {
 		s = append(s, fmt.Sprintf("%d) %s", i+1, data.Human()))
 	}
 	return strings.Join(s, "\n")
+}
+
+func (d Array) Quote() string {
+	quotes := make([]string, len(d))
+	for i, e := range d {
+		quotes[i] = e.Quote()
+	}
+	return strings.Join(quotes, " ")
 }
